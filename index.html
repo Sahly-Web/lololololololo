@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام الحضور والانصراف الميداني</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e40af">
+    <style>
+        :root {
+            --primary: #1e40af;
+            --primary-hover: #1e3a8a;
+            --success: #15803d;
+            --leave: #b91c1c;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text-main: #0f172a;
+            --text-sub: #475569;
+            --border: #e2e8f0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+        body { background-color: var(--bg); color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; }
+        
+        .card { background: var(--card); border: 1px solid var(--border); padding: 28px 24px; border-radius: 20px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); width: 100%; max-width: 420px; text-align: center; }
+        .logo-badge { width: 54px; height: 54px; background: #eff6ff; color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; font-size: 26px; }
+        
+        h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+        .subtitle { color: var(--text-sub); font-size: 13.5px; margin-bottom: 24px; line-height: 1.5; }
+        
+        .field { text-align: right; margin-bottom: 18px; }
+        .field label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; }
+        .field input, .field textarea { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 15px; outline: none; background: #fff; }
+        .field input:focus, .field textarea:focus { border-color: var(--primary); }
+
+        .btn { border: none; padding: 14px; width: 100%; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); }
+        .btn-leave { background: var(--leave); }
+
+        .info-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #f1f5f9; border-radius: 9999px; font-size: 12.5px; color: var(--text-sub); margin-bottom: 16px; font-weight: 500; }
+        .info-pill.pulse::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        .status-box { padding: 14px 16px; border-radius: 12px; margin-top: 18px; font-size: 13.5px; line-height: 1.5; font-weight: 500; text-align: right; display: none; }
+        .status-box.loading { display: block; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; text-align: center; }
+        .status-box.success { display: block; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .status-box.error { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+        .spinner { border: 3px solid #dbeafe; border-top: 3px solid var(--primary); border-radius: 50%; width: 22px; height: 22px; animation: spin 0.8s linear infinite; margin: 0 auto 10px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #app-view, #departure-section { display: none; }
+        .meta-text { font-size: 11.5px; color: #94a3b8; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. شاشة الإعداد الأول -->
+    <div class="card" id="onboarding-view">
+        <div class="logo-badge">🏢</div>
+        <h1>تسجيل حساب الموظف</h1>
+        <p class="subtitle">يتم تسجيل الحساب وربطه بجهازك الحالي لمرة واحدة فقط لضمان سلامة السجلات.</p>
+        
+        <div class="field">
+            <label>الاسم بالإنجليزية (Full Name)</label>
+            <input type="text" id="regName" placeholder="مثال: Yousef Elkassass" dir="ltr" required>
+        </div>
+        <div class="field">
+            <label>رقم الهاتف المعتمد</label>
+            <input type="tel" id="regPhone" placeholder="01xxxxxxxxx" dir="ltr" required>
+        </div>
+        <button class="btn btn-primary" onclick="handleRegistration()">حفظ والربط بالجهاز</button>
+    </div>
+
+    <!-- 2. واجهة التطبيق الرئيسية -->
+    <div class="card" id="app-view">
+        <div class="logo-badge">📍</div>
+        <div class="info-pill pulse" id="userPill">جاري المزامنة...</div>
+        <h1 id="screenTitle">فحص النطاق الجغرافي</h1>
+        <p class="subtitle" id="screenSubtitle">يتم التأكد تلقائياً من موقعك وإشارتك الحالية لمقر العمل.</p>
+
+        <div id="statusBox" class="status-box loading">
+            <div class="spinner" id="mainSpinner"></div>
+            <span id="statusMessage">جاري المزامنة مع الخادم...</span>
+        </div>
+
+        <div id="departure-section">
+            <div class="field">
+                <label>ملاحظات نهاية الشفت (اختياري)</label>
+                <textarea id="departureComment" rows="2" placeholder="أية ملاحظات أو تسليم مهام..."></textarea>
+            </div>
+            <button class="btn btn-leave" onclick="triggerCheckout()">
+                <span>🏃‍♂️</span>
+                <span>تسجيل الانصراف وإنهاء الشفت</span>
+            </button>
+        </div>
+
+        <div class="meta-text" id="deviceMeta"></div>
+    </div>
+
+    <script>
+        // ================= الإعدادات المركزية المربوطة =================
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2eBdTri6l3XNwEM3kMK9KW4ph4vlIsQTXtau2F3Va_hRtd7gorq_gDNStakymGRfP/exec';
+        const TARGET_LAT = 31.0827293;
+        const TARGET_LNG = 29.7423583;
+        const ALLOWED_RADIUS_METERS = 75;
+        // ==============================================================
+
+        let cachedProfile = null;
+        let isProcessing = false;
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(console.error);
+        }
+
+        function getOrCreateDeviceUUID() {
+            let uuid = localStorage.getItem('_secure_device_uuid');
+            if (!uuid) {
+                uuid = 'DEV-' + crypto.randomUUID();
+                localStorage.setItem('_secure_device_uuid', uuid);
+            }
+            return uuid;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const stored = localStorage.getItem('_emp_identity');
+            if (stored) {
+                cachedProfile = JSON.parse(stored);
+                cachedProfile.deviceId = getOrCreateDeviceUUID();
+                startApplicationFlow();
+            }
+        });
+
+        function handleRegistration() {
+            const name = document.getElementById('regName').value.trim();
+            const phone = document.getElementById('regPhone').value.trim();
+
+            if (!name || !phone) {
+                alert("يرجى ملء جميع الحقول بصورة صحيحة.");
+                return;
+            }
+
+            cachedProfile = {
+                name: name,
+                phone: phone,
+                deviceId: getOrCreateDeviceUUID()
+            };
+
+            localStorage.setItem('_emp_identity', JSON.stringify(cachedProfile));
+            startApplicationFlow();
+        }
+
+        function startApplicationFlow() {
+            document.getElementById('onboarding-view').style.display = 'none';
+            document.getElementById('app-view').style.display = 'block';
+            document.getElementById('userPill').innerText = `${cachedProfile.name} (${cachedProfile.phone})`;
+            document.getElementById('deviceMeta').innerText = `معرّف الجهاز: ${cachedProfile.deviceId.substring(0, 18)}...`;
+
+            syncWithServer();
+        }
+
+        // أسلوب JSONP لتخطي قيود الـ CORS نهائياً وموثوقية 100% مع Google Apps Script
+        function fetchJSONP(url, params) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'gas_cb_' + Math.round(100000 * Math.random());
+                const script = document.createElement('script');
+                params.callback = callbackName;
+                params._t = Date.now();
+
+                const queryString = new URLSearchParams(params).toString();
+                script.src = `${url}?${queryString}`;
+
+                const timer = setTimeout(() => {
+                    cleanup();
+                    reject(new Error("انتهت مهلة استجابة الخادم"));
+                }, 15000);
+
+                function cleanup() {
+                    if (window[callbackName]) delete window[callbackName];
+                    if (script.parentNode) script.parentNode.removeChild(script);
+                    clearTimeout(timer);
+                }
+
+                window[callbackName] = (data) => {
+                    cleanup();
+                    resolve(data);
+                };
+
+                script.onerror = () => {
+                    cleanup();
+                    reject(new Error("فشل تحميل السكربت"));
+                };
+
+                document.body.appendChild(script);
+            });
+        }
+
+        async function syncWithServer() {
+            updateStatus('loading', 'جاري المزامنة مع قاعدة بيانات الخادم...');
+
+            try {
+                const data = await fetchJSONP(SCRIPT_URL, {
+                    action: 'sync_status',
+                    name: cachedProfile.name,
+                    phone: cachedProfile.phone,
+                    deviceId: cachedProfile.deviceId
+                });
+
+                if (data.status !== 'success') {
+                    updateStatus('error', data.message);
+                    return;
+                }
+
+                evaluateWorkflow(data);
+
+            } catch (err) {
+                // محاولة احتياطية عبر fetch المباشر في حال تعذر السكربت
+                try {
+                    const params = new URLSearchParams({
+                        action: 'sync_status',
+                        name: cachedProfile.name,
+                        phone: cachedProfile.phone,
+                        deviceId: cachedProfile.deviceId,
+                        _t: Date.now()
+                    });
+                    const res = await fetch(`${SCRIPT_URL}?${params.toString()}`);
+                    const fallbackData = await res.json();
+                    if (fallbackData.status === 'success') {
+                        evaluateWorkflow(fallbackData);
+                        return;
+                    }
+                } catch(e) {}
+
+                updateStatus('error', `تعذر الاتصال بالخادم. تأكد من تفعيل الإنترنت أو مراجعة إعدادات النشر.`);
+            }
+        }
+
+        function evaluateWorkflow(serverState) {
+            if (!serverState.hasCheckedIn) {
+                document.getElementById('screenTitle').innerText = "تسجيل الحضور التلقائي";
+                document.getElementById('screenSubtitle').innerText = "يتم التحقق من موقعك لتسجيل الحضور فوراً وبدون تدخل منك.";
+                verifyLocationAndAct('attendance');
+            } else if (!serverState.hasCheckedOut) {
+                document.getElementById('screenTitle').innerText = "تسجيل الانصراف";
+                document.getElementById('screenSubtitle').innerText = `تم تسجيل حضورك اليوم في الساعة [${serverState.checkInTime}].`;
+                updateStatus('success', '✅ أنت مسجل حضور بالفعل اليوم.\nعند انتهاء عملك، اكتب ملاحظاتك واضغط زر الانصراف.');
+                document.getElementById('departure-section').style.display = 'block';
+            } else {
+                document.getElementById('screenTitle').innerText = "اكتمل يوم العمل";
+                document.getElementById('screenSubtitle').innerText = `حضور: ${serverState.checkInTime} | انصراف: ${serverState.checkOutTime}`;
+                updateStatus('success', '🎉 لقد أتممت تسجيل حضورك وانصرافك لهذا اليوم بنجاح.\nنراك غداً على خير إن شاء الله!');
+                document.getElementById('departure-section').style.display = 'none';
+            }
+        }
+
+        function verifyLocationAndAct(actionType, comment = "") {
+            if (!navigator.geolocation) {
+                updateStatus('error', 'متصفحك لا يدعم نظام تحديد المواقع (GPS).');
+                return;
+            }
+
+            updateStatus('loading', 'جاري التقاط إحداثيات GPS بدقة عالية...');
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const coords = pos.coords;
+                    const accuracy = coords.accuracy;
+
+                    if (accuracy > 40) {
+                        updateStatus('error', `إشارة GPS غير دقيقة (${Math.round(accuracy)} متر). يرجى الوقوف في مكان مكشوف.`);
+                        return;
+                    }
+
+                    const distance = Math.round(calculateHaversine(coords.latitude, coords.longitude, TARGET_LAT, TARGET_LNG));
+
+                    if (distance > ALLOWED_RADIUS_METERS) {
+                        const extra = distance - ALLOWED_RADIUS_METERS;
+                        updateStatus('error', `أنت خارج نطاق المقر بمسافة ${distance} متر.\n(يجب الاقتراب ${extra} متر على الأقل لتسجيل الحركة).`);
+                        return;
+                    }
+
+                    executeRecordOnServer(actionType, distance, accuracy, comment);
+                },
+                (error) => {
+                    let msg = "تعذر تحديد الموقع الجغرافي.";
+                    if (error.code === 1) msg = "تم رفض إذن الوصول للموقع (GPS). يرجى تفعيل الموقع للتطبيق.";
+                    if (error.code === 2) msg = "إشارة GPS غير متوفرة أو ضعيفة.";
+                    if (error.code === 3) msg = "انتهت مهلة طلب الموقع الجغرافي.";
+                    updateStatus('error', msg);
+                },
+                { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+            );
+        }
+
+        async function executeRecordOnServer(type, distance, accuracy, comment) {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            updateStatus('loading', 'جاري اعتماد العملية وحفظها في السجلات الرسمية...');
+
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        type: type,
+                        name: cachedProfile.name,
+                        phone: cachedProfile.phone,
+                        deviceId: cachedProfile.deviceId,
+                        distance: distance,
+                        accuracy: accuracy,
+                        comment: comment
+                    })
+                });
+
+                const data = await response.json();
+                isProcessing = false;
+
+                if (data.status === 'success') {
+                    updateStatus('success', data.message);
+                    document.getElementById('departure-section').style.display = 'none';
+                    setTimeout(syncWithServer, 2000);
+                } else {
+                    updateStatus('error', data.message);
+                    if (type === 'departure') {
+                        document.getElementById('departure-section').style.display = 'block';
+                    }
+                }
+
+            } catch (err) {
+                isProcessing = false;
+                updateStatus('error', 'حدث خطأ أثناء اعتماد البيانات: ' + err.message);
+                if (type === 'departure') {
+                    document.getElementById('departure-section').style.display = 'block';
+                }
+            }
+        }
+
+        function triggerCheckout() {
+            const comment = document.getElementById('departureComment').value.trim();
+            document.getElementById('departure-section').style.display = 'none';
+            verifyLocationAndAct('departure', comment);
+        }
+
+        function updateStatus(type, message) {
+            const box = document.getElementById('statusBox');
+            const spinner = document.getElementById('mainSpinner');
+            const msg = document.getElementById('statusMessage');
+
+            box.className = `status-box ${type}`;
+            msg.innerText = message;
+            spinner.style.display = (type === 'loading') ? 'block' : 'none';
+        }
+
+        function calculateHaversine(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const p1 = lat1 * Math.PI / 180;
+            const p2 = lat2 * Math.PI / 180;
+            const dp = (lat2 - lat1) * Math.PI / 180;
+            const dl = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+        }
+    </script>
+</body>
+</html>
